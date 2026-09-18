@@ -5,7 +5,7 @@ setup(
     version="1.0.0",
     description="Evidential Retrieval-Augmented Prototypical Networks for Uncertainty-Aware Few-Shot Chest X-Ray Classification",
     author="Abdullah Al Rubab",
-    author_email="rubab2712@gmail.com",
+    author_email="rubab2305101813@diu.edu.bd",
     url="https://github.com/ABRUBAB/UR-ProtoNet",
     packages=find_packages(),
     python_requires=">=3.9",
