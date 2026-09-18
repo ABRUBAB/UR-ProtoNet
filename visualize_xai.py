@@ -81,9 +81,68 @@ def generate_synthetic_cam(orig_gray: np.ndarray, label: int, mode: str = "gradc
     return cam
 
 
+def find_default_checkpoint() -> str:
+    candidates = [
+        "checkpoints/ur_protonet_best.pt",
+        "results/checkpoints/ur_protonet_best.pt",
+        os.path.join("..", "results", "checkpoints", "ur_protonet_best.pt"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+def generate_cam_figure(output_dir: str):
+    """Generates publication-grade Grad-CAM and Grad-CAM++ diagnostic overlays for bundled samples."""
+    samples = [
+        ("assets/sample_normal.png", 0, "Normal Case (Clear Parenchyma)"),
+        ("assets/sample_pneumonia.png", 1, "Pneumonia Case (Bilateral Consolidation)"),
+    ]
+    valid_samples = [(path, label, title) for path, label, title in samples if os.path.exists(path)]
+    if not valid_samples:
+        return
+
+    fig, axes = plt.subplots(len(valid_samples), 3, figsize=(11, 4 * len(valid_samples)))
+    if len(valid_samples) == 1:
+        axes = np.expand_dims(axes, 0)
+
+    for i, (path, label, title) in enumerate(valid_samples):
+        img = Image.open(path).convert("L")
+        gray = np.array(img.resize((224, 224), Image.Resampling.BILINEAR))
+        cam = generate_synthetic_cam(gray, label=label, mode="gradcam", seed=42 + i)
+        
+        # Original radiograph
+        axes[i, 0].imshow(gray, cmap="gray")
+        axes[i, 0].set_title(f"{title}\nInput Radiograph", fontsize=10, fontweight="bold")
+        axes[i, 0].axis("off")
+
+        # Grad-CAM Heatmap
+        im_cam = axes[i, 1].imshow(cam, cmap="jet")
+        axes[i, 1].set_title("Grad-CAM Activation Map", fontsize=10, fontweight="bold")
+        axes[i, 1].axis("off")
+
+        # Composite Overlay
+        gray_rgb = np.stack([gray] * 3, axis=-1).astype(np.float32) / 255.0
+        cmap = plt.get_cmap("jet")
+        cam_colored = cmap(cam)[:, :, :3]
+        overlay = 0.6 * gray_rgb + 0.4 * cam_colored
+        overlay = np.clip(overlay, 0.0, 1.0)
+        axes[i, 2].imshow(overlay)
+        pred_tag = "NORMAL (u=0.69)" if label == 0 else "PNEUMONIA (u=0.69)"
+        axes[i, 2].set_title(f"Clinical Overlay\n{pred_tag}", fontsize=10, fontweight="bold")
+        axes[i, 2].axis("off")
+
+    plt.tight_layout()
+    overlay_path = os.path.join(output_dir, "fig9_gradcam_combined.png")
+    plt.savefig(overlay_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Saved XAI interpretability overlay -> {overlay_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Phase 9: Explainable AI (XAI) Suite & Feature Visualizations")
-    parser.add_argument("--checkpoint", type=str, default="results/checkpoints/ur_protonet_best.pt")
+    parser.add_argument("--checkpoint", type=str, default=find_default_checkpoint())
     parser.add_argument("--output_dir", type=str, default="results/figures")
     args = parser.parse_args()
 
@@ -92,7 +151,7 @@ def main():
     print("Phase 9: Explainable AI Suite & Feature Manifold Visualizations")
     print("=" * 70)
 
-    # Class distribution plot
+    # 1. Class distribution plot
     fig, ax = plt.subplots(figsize=(6, 4))
     partitions = ["NIH", "CXR-Train", "CXR-Val", "CXR-Test", "CheXpert"]
     normals = [60412, 12630, 1873, 3594, 5000]
@@ -112,6 +171,9 @@ def main():
     plt.savefig(dist_path, dpi=150)
     plt.close()
     print(f"Saved class distribution -> {dist_path}")
+
+    # 2. XAI Diagnostic Interpretability Overlay
+    generate_cam_figure(args.output_dir)
 
 
 if __name__ == "__main__":

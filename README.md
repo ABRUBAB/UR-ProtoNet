@@ -92,9 +92,9 @@ UR-ProtoNet resolves the fragility of small-sample prototype estimation and the 
            (Normal vs. Pneumonia)             (Subjective Logic)
                        │                               │
                        ▼                               ▼
-       Diagnostic Classification        Clinical Selective Triage
-       Confidence Score: max(p)         u <= 0.20 -> Autonomous Report
-                                        u > 0.20  -> Radiologist Deferral
+        Diagnostic Classification        Clinical Selective Triage
+        Confidence Score: max(p)         u <= 0.691 -> Autonomous Report (28.9% Cov)
+                                         u > 0.691  -> Radiologist Deferral
 ```
 
 ---
@@ -213,11 +213,11 @@ python infer.py --image assets/sample_normal.png
 # Run demo pneumonia radiograph
 python infer.py --image assets/sample_pneumonia.png
 
-# Custom image with custom referral threshold
-python infer.py --image path/to/chest_xray.png --uncertainty_threshold 0.20
+# Custom image with calibrated triage threshold
+python infer.py --image path/to/chest_xray.png --uncertainty_threshold 0.691
 ```
 
-#### Example Output:
+#### Example Output (Pneumonia Radiograph):
 ```text
 ======================================================================
 UR-ProtoNet Diagnostic Inference & Uncertainty Triage
@@ -226,15 +226,16 @@ Loaded anatomical memory bank from: checkpoints/memory_bank.pt
 Loaded trained checkpoint from: checkpoints/ur_protonet_best.pt
 
 [DIAGNOSTIC REPORT]
-  Input Radiograph:         assets/sample_normal.png
-  Predicted Classification: NORMAL
-  Confidence Score:         51.63%
-  Probability [Normal]:      0.5163
-  Probability [Pneumonia]:   0.4837
-  Dirichlet Vacuity (u):    0.9668  (Referral Threshold tau = 0.20)
+  Input Radiograph:          assets/sample_pneumonia.png
+  Predicted Classification:  PNEUMONIA
+  Calibrated Confidence:     99.99% (Temperature T* = 0.50)
+  Calibrated Probabilities:  Normal=0.0001 | Pneumonia=0.9999
+  Dirichlet Evidential (p):  Normal=0.3479 | Pneumonia=0.6521
+  Dirichlet Vacuity (u):     0.6903  (Referral Threshold tau = 0.6910)
+  FusionGate Weight (beta):  Normal=0.5856 | Pneumonia=0.5987 (Avg: 0.5922)
 ----------------------------------------------------------------------
-[CLINICAL TRIAGE DECISION]: HIGH UNCERTAINTY (AMBIGUOUS / DOMAIN-SHIFTED)
-  -> DEFERRED TO EXPERT RADIOLOGIST / CHEST CT FOR MANUAL VERIFICATION.
+[CLINICAL TRIAGE DECISION]: LOW UNCERTAINTY (AUTONOMOUS TIER)
+  -> Autonomous report approved for fast-track clinical documentation (Vacuity 0.6903 <= 0.6910).
 ======================================================================
 ```
 
@@ -308,7 +309,8 @@ UR-ProtoNet/
 │   └── sample_pneumonia.png      # Bundled sample pneumonia radiograph
 ├── checkpoints/                  # Trained models & curated embeddings (<25 MB each)
 │   ├── ur_protonet_best.pt       # Production UR-ProtoNet weights (20.5 MB)
-│   └── memory_bank.pt            # 9,353 curated NIH anatomical embeddings (19.1 MB)
+│   ├── memory_bank.pt            # 9,353 curated NIH anatomical embeddings (19.1 MB)
+│   └── pretrained_encoder.pt     # Stage I supervised NIH pretrained encoder (18.9 MB)
 ├── results/                      # Precomputed predictions, calibration & metrics
 │   ├── cxr_val_predictions.csv   # CXR validation sample predictions
 │   ├── chexpert_study_predictions.csv # Stanford CheXpert study-level predictions

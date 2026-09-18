@@ -176,8 +176,13 @@ def main():
     fusion_gate = FusionGate(emb_dim=cfg.emb_dim).to(DEVICE)
 
     # Load pretrained encoder if available
-    pretrain_ckpt = os.path.join(args.output_dir, "pretrained_encoder.pt")
-    if os.path.exists(pretrain_ckpt):
+    pretrain_candidates = [
+        os.path.join("checkpoints", "pretrained_encoder.pt"),
+        os.path.join(args.output_dir, "pretrained_encoder.pt"),
+        os.path.join("..", "results", "checkpoints", "pretrained_encoder.pt"),
+    ]
+    pretrain_ckpt = next((c for c in pretrain_candidates if os.path.exists(c)), None)
+    if pretrain_ckpt:
         encoder.load_state_dict(torch.load(pretrain_ckpt, map_location=DEVICE), strict=False)
         print(f"Loaded Stage I pretrained encoder from {pretrain_ckpt}")
 

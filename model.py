@@ -33,9 +33,14 @@ class FeatureEncoder(nn.Module):
     ):
         super().__init__()
         if HAS_TIMM:
-            self.backbone = timm.create_model(
-                backbone_name, pretrained=pretrained, num_classes=0
-            )
+            try:
+                self.backbone = timm.create_model(
+                    backbone_name, pretrained=pretrained, num_classes=0
+                )
+            except Exception:
+                self.backbone = timm.create_model(
+                    backbone_name, pretrained=False, num_classes=0
+                )
             in_features = self.backbone.num_features  # 1280 for EfficientNet-B0
         else:
             # Fallback lightweight CNN feature extractor when timm is unavailable
@@ -65,7 +70,13 @@ class FeatureEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         feat = self.backbone(x)
-        proj = self.proj(feat)
+        if self.training and feat.size(0) == 1:
+            # Prevent BatchNorm1d crash on single sample during training
+            self.proj.eval()
+            proj = self.proj(feat)
+            self.proj.train()
+        else:
+            proj = self.proj(feat)
         norm_feat = F.normalize(proj, p=2, dim=-1)
         return norm_feat
 
@@ -216,6 +227,16 @@ class EvidentialHead(nn.Module):
         probs = alpha / S
         vacuity = 2.0 / S.squeeze(-1)
         return probs, vacuity, evidence
+
+    def predict_calibrated(
+        self, query_feats: torch.Tensor, prototypes: torch.Tensor, calib_temperature: float = 0.5
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Computes raw Dirichlet probabilities, vacuity, evidence, and temperature-calibrated probabilities (Eq. 462)."""
+        probs, vacuity, evidence = self.forward(query_feats, prototypes)
+        dists_sq = torch.cdist(query_feats, prototypes, p=2) ** 2
+        logits = -dists_sq / max(self.temperature, 1e-4)
+        calibrated_probs = F.softmax(logits / max(calib_temperature, 1e-4), dim=-1)
+        return probs, vacuity, evidence, calibrated_probs
 
 
 class URProtoNet(nn.Module):

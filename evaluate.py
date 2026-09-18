@@ -129,9 +129,21 @@ def find_results_file(filename: str) -> Optional[str]:
     return None
 
 
+def find_default_checkpoint() -> str:
+    candidates = [
+        "checkpoints/ur_protonet_best.pt",
+        "results/checkpoints/ur_protonet_best.pt",
+        os.path.join("..", "results", "checkpoints", "ur_protonet_best.pt"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
 def main():
     parser = argparse.ArgumentParser(description="UR-ProtoNet Comprehensive Diagnostic Evaluation")
-    parser.add_argument("--checkpoint", type=str, default="results/checkpoints/ur_protonet_best.pt")
+    parser.add_argument("--checkpoint", type=str, default=find_default_checkpoint())
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--fresh", action="store_true", help="Run model forward pass on raw images")
     args = parser.parse_args()

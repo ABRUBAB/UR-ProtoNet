@@ -129,15 +129,22 @@ def main():
     print("=" * 70)
 
     nih_df = load_nih_df()
-    encoder = FeatureEncoder(backbone_name=cfg.backbone, pretrained=cfg.backbone_pretrained,
+    encoder = FeatureEncoder(backbone_name=cfg.backbone, pretrained=False,
                              proj_dim=cfg.emb_dim, hidden_dim=cfg.proj_hidden_dim).to(DEVICE)
 
     if nih_df is None or len(nih_df) == 0:
         print("\nNotice: NIH ChestX-ray14 dataset files not found locally.")
         print(f"To run full pre-training, provide NIH images under '{cfg.nih_dir}' or attach NIH dataset.")
-        print("Using existing checkpoint or initializing fresh encoder for downstream verification.")
-        ckpt_path = os.path.join(args.output_dir, "pretrained_encoder.pt")
-        if not os.path.exists(ckpt_path):
+        existing_ckpt = next(
+            (p for p in [os.path.join(args.output_dir, "pretrained_encoder.pt"),
+                         "checkpoints/pretrained_encoder.pt",
+                         "../results/checkpoints/pretrained_encoder.pt"] if os.path.exists(p)),
+            None
+        )
+        if existing_ckpt:
+            print(f"Using existing trained Stage I checkpoint from: {existing_ckpt}")
+        else:
+            ckpt_path = os.path.join(args.output_dir, "pretrained_encoder.pt")
             torch.save(encoder.state_dict(), ckpt_path)
             print(f"Saved initial encoder template to {ckpt_path}")
         return

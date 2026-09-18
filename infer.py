@@ -94,10 +94,16 @@ def parse_args():
         help="Compute device (cuda or cpu)",
     )
     parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.50,
+        help="Post-hoc temperature scaling parameter T* (default: 0.50 per paper Sec 2.4.4)",
+    )
+    parser.add_argument(
         "--uncertainty_threshold",
         type=float,
-        default=0.20,
-        help="Epistemic vacuity referral threshold tau (default: 0.20)",
+        default=0.691,
+        help="Epistemic vacuity referral threshold tau (default: 0.691, optimal 28.9% coverage triage point per Table 6)",
     )
     return parser.parse_args()
 
@@ -153,39 +159,49 @@ def main():
     with torch.no_grad():
         feat = model.encoder(tensor_img)
 
-        # Synthesize canonical class prototypes from curated memory bank priors
+        # Synthesize canonical class prototypes through Neural FusionGate
         if model.memory_bank is not None:
-            proto_normal = F.normalize(model.memory_bank.mem_normal.mean(dim=0, keepdim=True), p=2, dim=-1)
-            proto_pneu = F.normalize(model.memory_bank.mem_pneumonia.mean(dim=0, keepdim=True), p=2, dim=-1)
-            prototypes = torch.cat([proto_normal, proto_pneu], dim=0)
+            c_norm_mem = F.normalize(model.memory_bank.mem_normal.mean(dim=0, keepdim=True), p=2, dim=-1)
+            c_pneu_mem = F.normalize(model.memory_bank.mem_pneumonia.mean(dim=0, keepdim=True), p=2, dim=-1)
+            # Pass priors through FusionGate to compute blended prototypes and gating weights
+            proto_norm, beta_norm = model.fusion_gate(c_norm_mem, c_norm_mem)
+            proto_pneu, beta_pneu = model.fusion_gate(c_pneu_mem, c_pneu_mem)
+            prototypes = torch.cat([proto_norm, proto_pneu], dim=0)
+            beta_vals = (beta_norm.item(), beta_pneu.item())
         else:
             proto_normal = F.normalize(torch.randn(1, 512, device=args.device), p=2, dim=-1)
             proto_pneu = F.normalize(torch.randn(1, 512, device=args.device), p=2, dim=-1)
             prototypes = torch.cat([proto_normal, proto_pneu], dim=0)
+            beta_vals = (1.0, 1.0)
 
-        probs, vacuity, evidence = model.edl_head(feat, prototypes)
+        probs, vacuity, evidence, calib_probs = model.edl_head.predict_calibrated(
+            feat, prototypes, calib_temperature=args.temperature
+        )
 
-    prob_normal = probs[0, 0].item()
-    prob_pneu = probs[0, 1].item()
+    prob_normal = calib_probs[0, 0].item()
+    prob_pneu = calib_probs[0, 1].item()
+    dir_normal = probs[0, 0].item()
+    dir_pneu = probs[0, 1].item()
     vacuity_val = vacuity[0].item()
     pred_class = "PNEUMONIA" if prob_pneu >= 0.5 else "NORMAL"
     confidence = max(prob_normal, prob_pneu)
 
     print(f"\n[DIAGNOSTIC REPORT]")
-    print(f"  Input Radiograph:       {args.image}")
-    print(f"  Predicted Classification: {pred_class}")
-    print(f"  Confidence Score:       {confidence * 100:.2f}%")
-    print(f"  Probability [Normal]:    {prob_normal:.4f}")
-    print(f"  Probability [Pneumonia]: {prob_pneu:.4f}")
-    print(f"  Dirichlet Vacuity (u):  {vacuity_val:.4f}  (Referral Threshold tau = {args.uncertainty_threshold:.2f})")
+    print(f"  Input Radiograph:          {args.image}")
+    print(f"  Predicted Classification:  {pred_class}")
+    print(f"  Calibrated Confidence:     {confidence * 100:.2f}% (Temperature T* = {args.temperature:.2f})")
+    print(f"  Calibrated Probabilities:  Normal={prob_normal:.4f} | Pneumonia={prob_pneu:.4f}")
+    print(f"  Dirichlet Evidential (p):  Normal={dir_normal:.4f} | Pneumonia={dir_pneu:.4f}")
+    print(f"  Dirichlet Vacuity (u):     {vacuity_val:.4f}  (Referral Threshold tau = {args.uncertainty_threshold:.4f})")
+    print(f"  FusionGate Weight (beta):  Normal={beta_vals[0]:.4f} | Pneumonia={beta_vals[1]:.4f} (Avg: {sum(beta_vals)/2:.4f})")
     print("-" * 70)
 
     if vacuity_val <= args.uncertainty_threshold:
-        print("[CLINICAL TRIAGE DECISION]: LOW UNCERTAINTY")
-        print("  -> Autonomous report approved for fast-track clinical documentation.")
+        print("[CLINICAL TRIAGE DECISION]: LOW UNCERTAINTY (AUTONOMOUS TIER)")
+        print(f"  -> Autonomous report approved for fast-track clinical documentation (Vacuity {vacuity_val:.4f} <= {args.uncertainty_threshold:.4f}).")
     else:
-        print("[CLINICAL TRIAGE DECISION]: HIGH UNCERTAINTY (AMBIGUOUS / DOMAIN-SHIFTED)")
-        print("  -> DEFERRED TO EXPERT RADIOLOGIST / CHEST CT FOR MANUAL VERIFICATION.")
+        print("[CLINICAL TRIAGE DECISION]: ELEVATED UNCERTAINTY (RADIOLOGIST REFERRAL)")
+        print(f"  -> DEFERRED TO EXPERT RADIOLOGIST / CHEST CT FOR MANUAL VERIFICATION (Vacuity {vacuity_val:.4f} > {args.uncertainty_threshold:.4f}).")
     print("=" * 70)
 
 
