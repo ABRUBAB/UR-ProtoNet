@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" width="1000" height="460" style="background: #0B0F19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <defs>
+    <linearGradient id="grad1" x1="0%"y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#1D4ED8" stop-opacity="0.9" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%"y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#6D28D9" stop-opacity="0.9" />
+    </linearGradient>
+    <linearGradient id="grad3" x1="0%"y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EC4899" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#BE185D" stop-opacity="0.9" />
+    </linearGradient>
+    <linearGradient id="grad4" x1="0%"y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#047857" stop-opacity="0.9" />
+    </linearGradient>
+  </defs>
+
+  <rect x="30" y="20" width="940" height="42" rx="8" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
+  <text x="500" y="46" text-anchor="middle" fill="#F8FAFC" font-size="15" font-weight="700" letter-spacing="1">UR-ProtoNet ARCHITECTURAL DATAFLOW & VISUAL OVERVIEW</text>
+
+  <!-- Stage 1 -->
+  <rect x="30" y="80" width="215" height="300" rx="10" fill="#111827" stroke="#1F2937" stroke-width="1.5" />
+  <rect x="45" y="95" width="185" height="30" rx="6" fill="#1E293B" />
+  <text x="137" y="115" text-anchor="middle" fill="#60A5FA" font-size="12" font-weight="bold">INPUT RADIOGRAPHS</text>
+  
+  <rect x="45" y="140" width="185" height="46" rx="6" fill="#1F2937" stroke="#374151" />
+  <text x="137" y="160" text-anchor="middle" fill="#E5E7EB" font-size="11" font-weight="600">Support Episodes</text>
+  <text x="137" y="175" text-anchor="middle" fill="#9CA3AF" font-size="9">Xs: [N=2, K=5, 3, 224, 224]</text>
+
+  <rect x="45" y="198" width="185" height="46" rx="6" fill="#1F2937" stroke="#374151" />
+  <text x="137" y="218" text-anchor="middle" fill="#E5E7EB" font-size="11" font-weight="600">Query Radiograph</text>
+  <text x="137" y="233" text-anchor="middle" fill="#9CA3AF" font-size="9">Xq: [1, 3, 224, 224]</text>
+
+  <rect x="45" y="260" width="185" height="105" rx="6" fill="url(#grad1)" />
+  <text x="137" y="285" text-anchor="middle" fill="#FFFFFF" font-size="12" font-weight="bold">EfficientNet-B0</text>
+  <text x="137" y="304" text-anchor="middle" fill="#DBEAFE" font-size="10">Feature Backbone (1280)</text>
+  <text x="137" y="322" text-anchor="middle" fill="#DBEAFE" font-size="10">+ Linear Proj &amp; L2 Norm</text>
+  <text x="137" y="340" text-anchor="middle" fill="#93C5FD" font-size="10" font-weight="bold">Embeddings: z; in S^511</text>
+
+  <!-- Stage 2 -->
+  <rect x="270" y="80" width="215" height="300" rx="10" fill="#111827" stroke="#1F2937" stroke-width="1.5" />
+  <rect x="285" y="95" width="185" height="30" rx="6" fill="#1E293B" />
+  <text x="377" y="115" text-anchor="middle" fill="#C084FC" font-size="12" font-weight="bold">STAGE II: MEMORY BANK</text>
+  
+  <rect x="285" y="140" width="185" height="80" rx="6" fill="url(#grad2)" />
+  <text x="377" y="165" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="bold">Curated NIH Memory Bank</text>
+  <text x="377" y="183" text-anchor="middle" fill="#EDE9FE" font-size="10">9,353 Anatomical Embeddings</text>
+  <text x="377" y="201" text-anchor="middle" fill="#DDD6FE" font-size="9">M_0: 8,000 Normal | M_1: 1,353 Pneu</text>
+
+  <rect x="285" y="235" width="185" height="130" rx="6" fill="#1F2937" stroke="#4C1D95" />
+  <text x="377" y="260" text-anchor="middle" fill="#DDD6FE" font-size="11" font-weight="bold">Top-K Cosine Retrieval</text>
+  <text x="377" y="280" text-anchor="middle" fill="#A78BFA" font-size="10">sim(c_n, m_j) = dot(c_n, m_j)</text>
+  <text x="377" y="298" text-anchor="middle" fill="#9CA3AF" font-size="9">Selects K=5 closest exemplars</text>
+  <text x="377" y="322" text-anchor="middle" fill="#E9D5FF" font-size="10" font-weight="bold">Memory Prototype c_n^mem</text>
+  <text x="377" y="340" text-anchor="middle" fill="#9CA3AF" font-size="9">Dimension: 512-d normalized</text>
+
+  <!-- Stage 3 -->
+  <rect x="510" y="80" width="215" height="300" rx="10" fill="#111827" stroke="#1F2937" stroke-width="1.5" />
+  <rect x="525" y="95" width="185" height="30" rx="6" fill="#1E293B" />
+  <text x="617" y="115" text-anchor="middle" fill="#F472B6" font-size="12" font-weight="bold">STAGE III: FUSIONGATE</text>
+  
+  <rect x="525" y="140" width="185" height="80" rx="6" fill="url(#grad3)" />
+  <text x="617" y="165" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="bold">Adaptive Neural Gate</text>
+  <text x="617" y="183" text-anchor="middle" fill="#FCE7F3" font-size="10">Concat: [c_sup, c_mem, prod]</text>
+  <text x="617" y="201" text-anchor="middle" fill="#FBCFE8" font-size="9">Dim: 1536 -3 256 -3 1</text>
+
+  <rect x="525" y="235" width="185" height="130" rx="6" fill="#1F2937" stroke="#831843" />
+  <text x="617" y="260" text-anchor="middle" fill="#FBCFE8" font-size="11" font-weight="bold">Learned Blending</text>
+  <text x="617" y="280" text-anchor="middle" fill="#F472B6" font-size="10">beta in [0, 1] (Sigmoid Gate)</text>
+  <text x="617" y="300" text-anchor="middle" fill="#4ADE80" font-size="10" font-weight="bold">Optimal Convergence: ~0.58</text>
+  <text x="617" y="322" text-anchor="middle" fill="#E5E7EB" font-size="10">c_fused = beta*c_sup +</text>
+  <text x="617" y="340" text-anchor="middle" fill="#E5E7EB" font-size="10">(1 - beta)*c_mem</text>
+
+  <!-- Stage 4 -->
+  <rect x="750" y="80" width="220" height="300" rx="10" fill="#111827" stroke="#1F2937" stroke-width="1.5" />
+  <rect x="765" y="95" width="190" height="30" rx="6" fill="#1E293B" />
+  <text x="860" y="115" text-anchor="middle" fill="#34D399" font-size="12" font-weight="bold">STAGE IV: EDL &amp; TINGE</text>
+  
+  <rect x="765" y="140" width="190" height="110" rx="6" fill="url(#grad4)" />
+  <text x="860" y="163" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="bold">Subjective Logic Head</text>
+  <text x="860" y="181" text-anchor="middle" fill="#D1FAE5" font-size="10">e_k = exp(-|zq - c|^2 / tau)</text>
+  <text x="860" y="199" text-anchor="middle" fill="#D1FAE5" font-size="10">Dirichlet alpha = e+I</text>
+  <text x="860" y="217" text-anchor="middle" fill="#A7F3D0" font-size="10">Probability: p_k = alpha_k / S</text>
+  <text x="860" y="237" text-anchor="middle" fill="#FDE047" font-size="10" font-weight="bold">Epistemic Vacuity: u = 2/S</text>
+
+  <rect x="765" y="260" width="190" height="105" rx="6" fill="#1F2937" stroke="#065F46" />
+  <text x="860" y="285" text-anchor="middle" fill="#6EE7B7" font-size="11" font-weight="bold">Selective Clinical Triage</text>
+  <text x="860" y="305" text-anchor="middle" fill="#4ADE80" font-size="10">u &lt;= 0.20: Autonomous Report</text>
+  <text x="860" y="325" text-anchor="middle" fill="#F87171" font-size="10">u &gt; 0.20: Expert Deferral</text>
+  <text x="860" y="345" text-anchor="middle" fill="#FCD34D" font-size="9" font-weight="bold">+15.2% Macro-F1 at 28.9% Coverage</text>
+
+  <!-- Footer -->
+  <rect x="30" y="395" width="940" height="45" rx="8" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+  <text x="500" y="423" text-anchor="middle" fill="#94A3B8" font-size="11">Deterministic Single Pass  |  No Ensembles Required  |  Patient-Leakage-Free Splitting  |  Unit Hypersphere Projection</text>
+</svg>
