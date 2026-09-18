@@ -32,3 +32,7 @@ data/*.zip
 
 model_weights_only.pt
 *.log
+
+# Output and evaluation results
+results/
+*.csv
