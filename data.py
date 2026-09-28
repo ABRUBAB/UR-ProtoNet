@@ -184,8 +184,26 @@ def _walk_class_dir(dirpath: str, label: int, dataset_tag: str = "CXR") -> List[
     return rows
 
 
+def find_cxr_root(custom_root: Optional[str] = None) -> Optional[str]:
+    candidates = [
+        custom_root or cfg.cxr_root,
+        "/kaggle/input/datasets/reflex7/cxr-data-set",
+        "/kaggle/input/cxr-data-set",
+        "/kaggle/input/chest-xray-pneumonia/chest_xray",
+        "/kaggle/input/chest-xray-pneumonia",
+        "data/cxr",
+    ]
+    for c in candidates:
+        if c and os.path.isdir(c):
+            return c
+    for p in glob.glob("/kaggle/input/*cxr*") + glob.glob("data/*cxr*"):
+        if os.path.isdir(p):
+            return p
+    return None
+
+
 def load_cxr_df(cxr_root: Optional[str] = None) -> Optional[pd.DataFrame]:
-    root = cxr_root or cfg.cxr_root
+    root = find_cxr_root(cxr_root)
     if not root or not os.path.isdir(root):
         return None
     class_map = {"normal": 0, "pneumonia": 1}
