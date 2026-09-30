@@ -336,6 +336,17 @@ UR-ProtoNet/
 
 ---
 
+## 👥 Authors & Correspondence
+
+* **Abdullah Rubab** — Department of Computer Science and Engineering, Daffodil International University (`rubab2305101813@diu.edu.bd`)
+* **Md Faysal Ahmed** — Department of Computer Science and Engineering, Daffodil International University
+* **Dr. Md. Ali Hossain** (**Corresponding Author**) — Associate Professor, Department of Computer Science and Engineering & Director, NanoBio Technology Center, Daffodil International University (`ali.cse@diu.edu.bd`)
+* **Ohidujjaman** — Department of Computer Science and Engineering, United International University (`ohidujjaman@cse.uiu.ac.bd`)
+
+> **Correspondence**: Direct all research, collaboration, and clinical inquiries to **Dr. Md. Ali Hossain** ([ali.cse@diu.edu.bd](mailto:ali.cse@diu.edu.bd)).
+
+---
+
 ## 📄 License
 
 This repository is licensed under the [MIT License](LICENSE).
