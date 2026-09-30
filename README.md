@@ -155,9 +155,9 @@ By deferring high-uncertainty cases ($u > \tau$) to radiologist review, diagnost
 | Clinical Coverage ($\%$) | Deferral Rate ($\%$) | Macro-F1 Score | Pneumonia Recall (Sensitivity) | Clinical Interpretation |
 | :---: | :---: | :---: | :---: | :--- |
 | **19.5%** | 80.5% | 0.821 | **97.2%** | Ultra-high confidence fast-track autonomous screening |
-| **28.9%** | 71.1% | **0.878** | **92.2%** | **Optimal Triage Operating Point (+15.2% F1 over un-triaged)** |
+| **28.9%** | 71.1% | **0.878** | **92.2%** | **Optimal Triage Operating Point (+15.4 pp / +21.3% rel. over un-triaged baseline)** |
 | **52.6%** | 47.4% | 0.830 | 74.2% | Balanced workload reduction |
-| **100.0%** | 0.0% | 0.727 | 60.6% | Un-triaged full autonomous deployment |
+| **100.0%** | 0.0% | **0.724** | 60.6% | Un-triaged full autonomous baseline |
 
 ---
 
