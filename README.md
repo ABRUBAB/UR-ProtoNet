@@ -1,353 +1,109 @@
-<div align="center">
+# UR-ProtoNet
 
-# 🫁 UR-ProtoNet: Uncertainty-Aware Retrieval-Augmented Prototypical Networks
+**Evidential Retrieval-Augmented Prototypical Networks for Uncertainty-Aware Few-Shot Chest X-Ray Classification Across Domain Shifts**
 
-### *Robust Few-Shot Chest Radiograph Classification Across Clinical Domain Shifts*
+This repository contains the complete implementation behind the manuscript (revised version, *Intelligence-Based Medicine*, IBMED-D-26-00736). The code covers preprocessing, the three training stages, all baselines and ablations, evaluation under two support protocols, the statistics, and every table and figure of the paper and its supplement.
 
-<p align="center">
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.9%2B-3776AB.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.9+"></a>
-  <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg?style=for-the-badge&logo=pytorch&logoColor=white" alt="PyTorch 2.0+"></a>
-  <a href="https://github.com/ABRUBAB/UR-ProtoNet"><img src="https://img.shields.io/badge/Task-Few--Shot%20Learning-8B5CF6.svg?style=for-the-badge&logo=target&logoColor=white" alt="Few-Shot Learning"></a>
-  <a href="https://github.com/ABRUBAB/UR-ProtoNet"><img src="https://img.shields.io/badge/Uncertainty-Dirichlet%20Vacuity-10B981.svg?style=for-the-badge&logo=speedtest&logoColor=white" alt="Uncertainty Quantification"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-F59E0B.svg?style=for-the-badge&logo=open-source-initiative&logoColor=white" alt="License: MIT"></a>
-</p>
+<p align="center"><img src="assets/workflow_overview.png" width="90%" alt="UR-ProtoNet workflow"></p>
 
-<p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=16&duration=2800&pause=1000&color=38BDF8&center=true&vCenter=true&width=750&lines=Episodic+Few-Shot+Learning+%2B+Curated+Anatomical+Memory+Retrieval;Adaptive+Neural+FusionGate+Balancing+(%CE%B2+%E2%89%88+0.58);Subjective+Logic+Evidential+Deep+Learning+(u+%3D+2%2FS);97.1%25+In-Domain+F1+%7C+81.5%25+AUROC+Under+Stanford+CheXpert+Shift" alt="UR-ProtoNet Highlights">
-</p>
+## Method in brief
 
----
+UR-ProtoNet classifies a chest radiograph as Normal or Pneumonia from *K* labeled support images per class.
 
-</div>
+- **Encoder.** An EfficientNet-B0 backbone with a two-layer projection head to a 512-d, L2-normalized embedding. Stage I pre-trains it on all 14 findings of NIH ChestX-ray14.
+- **Labeled memory.** 8,000 Normal and 1,353 Pneumonia NIH embeddings. For each class, the top-5 entries most similar to the episode prototype are retrieved, and their similarity-weighted mean is the memory prototype.
+- **FusionGate.** A small MLP on `[c, c_mem]` that outputs a per-class weight β and fuses the two prototypes as `c~ = β c + (1 − β) c_mem`.
+- **Evidential head.** Computes `log e_n = (γ − d_n²)/τ` with learned γ and τ, and `α = e + 1`. It yields the probability `E[p] = α/S`, the vacuity `u = 2/S` (bounded by `1/(1+e^{γ/τ}) ≤ u < 1`) and the dissonance `2 min(b_0, b_1)`. For two classes, `u + diss = 2(1 − max E[p])`.
+- **Two-step Stage III.**
+  1. Episodic meta-training of the encoder and the evidential head (cross-entropy plus annealed KL regularization).
+  2. The memory is encoded once with the final encoder, and only the FusionGate is trained on the frozen embeddings.
+- **Inference.**
+  - Temperature scaling is fitted on CXR-Val.
+  - Predictions are ensembled over M = 20 support sets.
+  - An optional transductive mode adapts the decision rule to an unlabeled batch from the deployment site (`urproto/tta.py`).
 
-## 📌 Architectural Overview & Dataflow Pipeline
+## Main results (10 independent runs, mean ± SD)
 
-<div align="center">
-  <img src="assets/architecture_diagram.svg" width="100%" alt="UR-ProtoNet Architecture Schematic">
-</div>
+| Evaluation set | Support images | Macro-F1 | AUROC | ECE |
+|---|---|---|---|---|
+| CXR-Test (2,834 images, de-duplicated) | source (CXR-Train) | 0.956 ± 0.004 | 0.994 ± 0.002 | 0.018 |
+| CheXpert (8,856 patients) | 5 per class from CheXpert (patient-disjoint) | 0.790 ± 0.010 | 0.862 ± 0.010 | 0.044 |
+| CheXpert (8,856 patients) | source (CXR-Train) | 0.670 ± 0.060 | 0.835 ± 0.021 | 0.174 |
+| SIIM-FISABIO-RSNA (5,454 studies) | 5 per class from SIIM (study-disjoint) | 0.652 ± 0.059 | 0.850 ± 0.021 | 0.111 |
 
-UR-ProtoNet resolves the fragility of small-sample prototype estimation and the lack of reliable epistemic uncertainty quantification in chest radiograph analysis through three tightly integrated modules:
+The comparison with EfficientNet-Binary, VanillaProtoNet, MatchingNet and SimpleShot, the ablations, the memory analyses, the risk–coverage analysis and the transductive mode are reported in the paper. The summary tables are in `paper_results/`.
 
-| Subsystem | Underlying Formulation | Clinical Function |
-| :--- | :--- | :--- |
-| **1. Labeled Anatomical Memory Bank** | $\mathcal{M} = \{\mathbf{m}_j, y_j\}_{j=1}^{9353} \subset \mathbb{S}^{511}$ (8,000 Normal / 1,353 Pneumonia) | Pre-computed embeddings from NIH ChestX-ray14 provide dense, reliable anatomical priors via top-$K$ cosine similarity retrieval ($K=5$). |
-| **2. Adaptive Neural FusionGate** | $\beta = \sigma\big(g_\psi([\mathbf{c}_n \mathbin{\|} \mathbf{c}_n^{\text{mem}} \mathbin{\|} \mathbf{c}_n \odot \mathbf{c}_n^{\text{mem}}])\big)$ | Dynamically blends local episode prototypes ($\mathbf{c}_n$) and global memory priors ($\mathbf{c}_n^{\text{mem}}$), converging to an optimal $\sim$58/42 synergy ($\beta \approx 0.58$). |
-| **3. Evidential Deep Learning Head** | $e_k = \exp(-\|\mathbf{z}_q - \tilde{\mathbf{c}}_k\|_2^2 / \tau)$, $\boldsymbol{\alpha} = \mathbf{e} + 1$, $u = 2 / S$ | Parameterizes continuous Dirichlet distributions over diagnostic classes, outputting expected probabilities and exact epistemic vacuity in a single deterministic forward pass. |
-
----
-
-## 🔬 Microscopic Tensor Topology
+## Repository structure
 
 ```
-[ Support Radiographs Xs ]                     [ Query Radiograph Xq ]
-  (2-Way 5-Shot: 10 images)                       (1 Frontal Radiograph)
-            │                                               │
-            ▼                                               ▼
-┌───────────────────────┐                       ┌───────────────────────┐
-│  EfficientNet-B0 (1280)│                       │  EfficientNet-B0 (1280)│
-│  Linear(1280->512)    │                       │  Linear(1280->512)    │
-│  BatchNorm1d + L2 Norm│                       │  BatchNorm1d + L2 Norm│
-└───────────────────────┘                       └───────────────────────┘
-            │                                               │
-            ▼                                               ▼
- Base Prototypes cn ∈ S^511                        Query Embedding zq ∈ S^511
-     │             │                                        │
-     │             ▼                                        │
-     │   ┌──────────────────────────────┐                   │
-     │   │  NIH Curated Memory Bank     │                   │
-     │   │  (9,353 Curated Embeddings)  │                   │
-     │   │  Top-K Cosine Sim Retrieval  │                   │
-     │   └──────────────────────────────┘                   │
-     │                 │                                    │
-     ▼                 ▼                                    │
- [ Episode cn ]   [ Memory cn^mem ]                         │
-     │                 │                                    │
-     └─────────┬───────┘                                    │
-               ▼                                            │
-   ┌───────────────────────┐                                │
-   │   Neural FusionGate   │                                │
-   │   Linear(1536 -> 256) │                                │
-   │   ReLU -> Dropout(0.1)│                                │
-   │   Linear(256 -> 1)    │                                │
-   │   β = σ(·) ≈ 0.58     │                                │
-   └───────────────────────┘                                │
-               │                                            │
-               ▼                                            │
-  Augmented Prototypes c̃n ∈ S^511                           │
-               │                                            │
-               └───────────────────────┬────────────────────┘
-                                       ▼
-                       ┌───────────────────────────────┐
-                       │    Evidential Head (EDL)      │
-                       │  dn^2 = ||zq - c̃n||_2^2       │
-                       │  en = exp(-dn^2 / tau)        │
-                       │  alpha_n = en + 1             │
-                       │  S = sum(alpha)               │
-                       └───────────────────────────────┘
-                                       │
-                       ┌───────────────┴───────────────┐
-                       ▼                               ▼
-            Expected Probabilities           Epistemic Vacuity
-              pn = alpha_n / S                    u = 2 / S
-           (Normal vs. Pneumonia)             (Subjective Logic)
-                       │                               │
-                       ▼                               ▼
-        Diagnostic Classification        Clinical Selective Triage
-        Confidence Score: max(p)         u <= 0.691 -> Autonomous Report (28.9% Cov)
-                                         u > 0.691  -> Radiologist Deferral
+urproto/          the package
+  config.py       all hyperparameters (dataclass Config)
+  data.py         dataset tables, de-duplication (dHash, patient, NIH origin), preprocessing, cache, augmentation
+  models.py       encoder, memory bank, FusionGate, evidential head, baselines
+  train.py        Stage I (binary / multi-label), episodic meta-training, two-step training, supervised baseline
+  evaluate.py     support-set ensembles, temperature scaling, metrics
+  tta.py          optional transductive inference, evidential uncertainty decomposition
+  stats.py        paired t / Wilcoxon tests, Holm, DeLong, bootstrap, risk-coverage, AURC
+  xai.py          Grad-CAM, Grad-CAM++, LIME
+  jobs.py         command-line entry point for every job
+  report.py       tables and figures from the saved predictions
+  paper_tables.py, paper_figs.py, supp_tex.py, supp_figs.py   manuscript and supplement tables / figures
+assets/           image lists (CXR train/val split, CheXpert query set, CXR images that originate from NIH)
+checkpoints/      Stage I encoder and the UR-ProtoNet model of seed 42
+paper_results/    summary tables of the 10-run evaluation
 ```
 
----
+## Data
 
-## 📊 Benchmark Results (Synchronized with Current Manuscript)
+All datasets are public Kaggle datasets. The paths are discovered automatically below `/kaggle/input`, or below the directory given in the environment variable `URP_INPUT`.
 
-All experimental evaluations are strictly patient-leakage-free, using GroupShuffleSplit on unique patient identifiers. External validation was executed on Stanford CheXpert ($N=10,000$ individual radiographs / 8,856 unique clinical studies) under severe multi-institutional distribution shift.
+- NIH ChestX-ray14, 224 × 224 distribution (`khanfashee/nih-chest-x-ray-14-224x224-resized`)
+- CXR corpus (`reflex7/cxr-data-set`), which aggregates the Kermany et al. collection and other public sources
+- CheXpert-v1.0-small (`ashery/chexpert`)
+- SIIM-FISABIO-RSNA COVID-19 detection: images (`xhlulu/siim-covid19-resized-to-224px-png`) and study labels (`surajghuwalewala/siim-covid19-detection-data`)
 
-### 1. Primary Classification Benchmark (with 95% Bootstrap CIs)
+`assets/` fixes the CXR train/validation split and the 10,000 CheXpert query images. The strict CXR-Val and CXR-Test subsets, the patient-disjoint CheXpert support pool and the SIIM-FISABIO-RSNA pools are derived deterministically by `urproto/data.py`.
 
-| Evaluation Cohort | Partition Size ($N$) | Macro-F1 [95% CI] | AUROC [95% CI] | Brier Score | ECE (Calibrated) | Unc $\to$ Error AUROC | Error Rate |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **In-Domain CXR Validation** | 3,628 images | **0.971** [0.965, 0.976] | **0.990** [0.987, 0.993] | **0.128** | 0.316 | **0.763** | **2.89%** (105 / 3,628) |
-| **External Stanford CheXpert Shift** | 10,000 images | **0.724** [0.715, 0.734] | **0.815** [0.806, 0.824] | **0.202** | **0.090** | **0.677** | **26.90%** (2,690 / 10,000) |
+## Reproduction
 
----
-
-### 2. Comparative Baseline Benchmark (Stanford CheXpert External Shift)
-
-Evaluated across three independent random seeds (42, 123, 777). Statistical significance assessed via paired two-tailed $t$-tests ($\text{df}=2$).
-
-| Method | Paradigm | Labeled Target Samples | Macro-F1 (Mean $\pm$ Std) | AUROC (Mean $\pm$ Std) | $\Delta\text{F}_1$ vs. UR | $t$-statistic | $p$-value | Cohen's $d$ |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **UR-ProtoNet (Ours)** | **Few-Shot (5-Shot)** | **5 per class** | **0.724 $\pm$ 0.005** | **0.815 $\pm$ 0.004** | — | — | — | — |
-| EfficientNet-Binary | Supervised Full-Set | 25,396 images | 0.710 $\pm$ 0.005 | 0.773 $\pm$ 0.004 | +0.014 | 112.6 | $< 0.001$ | 79.6 |
-| VanillaProtoNet | Few-Shot (5-Shot) | 5 per class | 0.686 $\pm$ 0.007 | 0.758 $\pm$ 0.006 | +0.038 | 42.9 | $< 0.001$ | 30.3 |
-| SimpleShot | Nearest Neighbor | 5 per class | 0.671 $\pm$ 0.006 | 0.744 $\pm$ 0.005 | +0.053 | 130.4 | $< 0.001$ | 92.2 |
-| MatchingNet | Metric Attention | 5 per class | 0.654 $\pm$ 0.006 | 0.728 $\pm$ 0.006 | +0.070 | 120.5 | $< 0.001$ | 85.2 |
-
----
-
-### 3. Component-Wise Architectural Ablation
-
-| Variant Description | Memory Bank | FusionGate | EDL Head | Macro-F1 | AUROC | Brier Score | ECE | Unc $\to$ Error AUROC |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **PlainProto Baseline** | ❌ | ❌ | ❌ | 0.671 | 0.744 | 0.310 | 0.302 | 0.501 |
-| **Proto + Memory Bank** | ✅ | ❌ | ❌ | 0.695 | 0.771 | 0.284 | 0.265 | 0.523 |
-| **Proto + EDL Head** | ❌ | ❌ | ✅ | 0.702 | 0.789 | 0.261 | 0.222 | 0.631 |
-| **UR-ProtoNet (Full Architecture)** | ✅ | ✅ | ✅ | **0.724** | **0.815** | **0.220** | **0.167** | **0.677** |
-
----
-
-### 4. Support Set Size Sensitivity ($K$-Shot Scaling)
-
-| Support Shots ($K$) | Macro-F1 | AUROC | Brier Score | ECE | Uncertainty $\to$ Error AUROC |
-| :---: | :---: | :---: | :---: | :---: | :---: |
-| **$K = 1$ (Extreme 1-Shot)** | 0.652 | 0.722 | 0.331 | 0.320 | 0.611 |
-| **$K = 3$** | 0.691 | 0.768 | 0.271 | 0.231 | 0.642 |
-| **$K = 5$ (Canonical Episode)** | **0.724** | **0.815** | **0.220** | **0.167** | **0.677** |
-| **$K = 10$** | 0.741 | 0.831 | 0.208 | 0.152 | 0.692 |
-
----
-
-### 5. Clinical Selective Triage (Risk-Coverage Optimization)
-
-By deferring high-uncertainty cases ($u > \tau$) to radiologist review, diagnostic sensitivity and overall macro-F1 surge substantially across remaining autonomous examinations:
-
-| Clinical Coverage ($\%$) | Deferral Rate ($\%$) | Macro-F1 Score | Pneumonia Recall (Sensitivity) | Clinical Interpretation |
-| :---: | :---: | :---: | :---: | :--- |
-| **19.5%** | 80.5% | 0.821 | **97.2%** | Ultra-high confidence fast-track autonomous screening |
-| **28.9%** | 71.1% | **0.878** | **92.2%** | **Optimal Triage Operating Point (+15.4 pp / +21.3% rel. over un-triaged baseline)** |
-| **52.6%** | 47.4% | 0.830 | 74.2% | Balanced workload reduction |
-| **100.0%** | 0.0% | **0.724** | 60.6% | Un-triaged full autonomous baseline |
-
----
-
-## 🖼️ Visual Gallery: Diagnostic Performance & Interpretability
-
-<div align="center">
-
-| **External ROC Curves (All Methods)** | **Clinical Selective Triage Abstention** |
-| :---: | :---: |
-| <img src="assets/roc_curves.png" width="460" alt="ROC Comparison"> | <img src="assets/abstention_curve.png" width="460" alt="Abstention Curve"> |
-
-| **CXR Validation Confusion Matrix** | **CheXpert External Confusion Matrix** |
-| :---: | :---: |
-| <img src="assets/cm_cxr_val.png" width="420" alt="CXR CM"> | <img src="assets/cm_chexpert.png" width="420" alt="CheXpert CM"> |
-
-| **Explainable AI (Grad-CAM & Grad-CAM++ Interpretability)** |
-| :---: |
-| <img src="assets/gradcam_interpretability.png" width="850" alt="XAI Interpretability"> |
-
-</div>
-
----
-
-## ⚡ Quickstart: Zero-Setup Inference & Reproducibility
-
-### 1. Installation
+Every job runs on a single 16 GB GPU (the paper used Kaggle T4 sessions).
 
 ```bash
-# Clone repository
-git clone https://github.com/ABRUBAB/UR-ProtoNet.git
-cd UR-ProtoNet
+# 1. Preprocess and cache all datasets (CPU)
+python -m urproto.jobs cache --out out/cache --assets assets
+python -m urproto.jobs cache_nih14 --out out/cache_nih14
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-# or: venv\Scripts\activate  # Windows
+# 2. Stage I: multi-label NIH pre-training (checkpoint = best held-out mean AUROC)
+python -m urproto.jobs stage1 --out out/stage1 \
+  --override '{"pre_task": "multilabel", "pre_epochs": 8, "pre_exclude_cxr_eval": true, "pre_logit_scale": 16.0, "pre_aux_head": true}'
 
-# Install dependencies and package
-pip install -r requirements.txt
-pip install -e .
+# 3. Stage III, all seven methods and the full evaluation, for each seed
+python -m urproto.jobs seeds --out out/seeds --seeds 42 123 777 0 999 1 7 13 2024 31337 \
+  --override '{"decoupled": true, "aug_mode": "dg"}' \
+  --tta '{"tcr": 1.0, "rho": 0.5, "iters": 10, "est_prior": true}'
+
+# 4. Explanations for the seed-42 model
+python -m urproto.jobs xai --out out/xai --seeds 42 --lime
+
+# 5. Tables and figures
+python -m urproto.report --runs out/seeds --out out/report --stage1 out/stage1 --xai out/xai
+python -m urproto.paper_tables --rep out/report --out out/report/tex
+python -m urproto.paper_figs --runs out/seeds --out out/report/paper --seed 42
 ```
 
----
+Use `--cache` and `--encoder` to point a job to an existing cache or Stage I encoder. One seed of step 3, which covers all methods, both support protocols, the K-shot and the memory analyses, takes about 1.2 h on a T4.
 
-### 2. Single-Image Clinical Diagnostic Inference
+## Checkpoints
 
-Run inference on any chest radiograph image out of the box using pre-loaded weights:
+- `checkpoints/stage1_encoder.pt` is the Stage I encoder (`state_dict` of `urproto.models.Encoder`).
+- `checkpoints/urprotonet_seed42.pt` is the full UR-ProtoNet model of seed 42: `{"state_dict", "T", "cfg"}` for `ProtoModel(Encoder(...), "full", cfg)`, where `T` is the temperature fitted on CXR-Val.
 
-```bash
-# Run demo normal radiograph
-python infer.py --image assets/sample_normal.png
+The memory embeddings are recomputed from the NIH images with `urproto.train.build_memory`, as in `jobs.py xai`.
 
-# Run demo pneumonia radiograph
-python infer.py --image assets/sample_pneumonia.png
+## Citation
 
-# Custom image with calibrated triage threshold
-python infer.py --image path/to/chest_xray.png --uncertainty_threshold 0.691
-```
+If you use this code, please cite the paper (citation details will be added on publication).
 
-#### Example Output (Pneumonia Radiograph):
-```text
-======================================================================
-UR-ProtoNet Diagnostic Inference & Uncertainty Triage
-======================================================================
-Loaded anatomical memory bank from: checkpoints/memory_bank.pt
-Loaded trained checkpoint from: checkpoints/ur_protonet_best.pt
+## License
 
-[DIAGNOSTIC REPORT]
-  Input Radiograph:          assets/sample_pneumonia.png
-  Predicted Classification:  PNEUMONIA
-  Calibrated Confidence:     99.99% (Temperature T* = 0.50)
-  Calibrated Probabilities:  Normal=0.0001 | Pneumonia=0.9999
-  Dirichlet Evidential (p):  Normal=0.3479 | Pneumonia=0.6521
-  Dirichlet Vacuity (u):     0.6903  (Referral Threshold tau = 0.6910)
-  FusionGate Weight (beta):  Normal=0.5856 | Pneumonia=0.5987 (Avg: 0.5922)
-----------------------------------------------------------------------
-[CLINICAL TRIAGE DECISION]: LOW UNCERTAINTY (AUTONOMOUS TIER)
-  -> Autonomous report approved for fast-track clinical documentation (Vacuity 0.6903 <= 0.6910).
-======================================================================
-```
-
----
-
-### 3. Python API Usage
-
-```python
-import torch
-from model import URProtoNet
-
-# 1. Instantiate and load pre-trained network with persistent memory bank
-model = URProtoNet.from_pretrained(
-    checkpoint_path="checkpoints/ur_protonet_best.pt",
-    memory_bank_path="checkpoints/memory_bank.pt",
-    device="cuda" if torch.cuda.is_available() else "cpu"
-)
-
-# 2. Forward pass with support set and query images
-support_x = torch.randn(10, 3, 224, 224)  # 2-way 5-shot
-support_y = torch.tensor([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
-query_x   = torch.randn(1, 3, 224, 224)
-
-probs, vacuity, evidence, beta = model.forward_episode(
-    support_x, support_y, query_x, n_way=2, top_k=5
-)
-
-print("Class Probabilities:", probs)
-print("Epistemic Vacuity (Uncertainty):", vacuity.item())
-print("FusionGate Blending Weight (beta):", beta.mean().item())
-```
-
----
-
-### 4. Full Scientific Reproduction Pipeline
-
-Every phase of the experimental evaluation runs out of the box with bundled precomputed artifacts:
-
-```bash
-# Phase 5: Comprehensive in-domain and external cross-domain evaluation
-python evaluate.py
-
-# Phase 6: Post-hoc calibration, domain shift analysis, and selective triage curves
-python triage_analysis.py
-
-# Phase 7: Baseline comparisons (EffNet, VanillaProto, SimpleShot, MatchingNet) & t-tests
-python run_baselines.py
-
-# Phase 8: Component ablation study and K-shot scaling analysis
-python run_ablations.py
-
-# Phase 9: Explainable AI (XAI) suite and class distribution plots
-python visualize_xai.py
-```
-
----
-
-## 📁 Repository Structure
-
-```text
-UR-ProtoNet/
-├── assets/                       # High-resolution SVG and publication figures
-│   ├── architecture_diagram.svg  # Comprehensive vector architecture schematic
-│   ├── workflow_overview.png     # Full experimental workflow overview
-│   ├── roc_curves.png            # External domain shift ROC curves
-│   ├── abstention_curve.png      # Risk-coverage triage trade-off curve
-│   ├── cm_cxr_val.png            # In-domain CXR validation confusion matrix
-│   ├── cm_chexpert.png           # Stanford CheXpert study-level confusion matrix
-│   ├── gradcam_interpretability.png # Multi-perspective XAI overlays
-│   ├── sample_normal.png         # Bundled sample normal radiograph
-│   └── sample_pneumonia.png      # Bundled sample pneumonia radiograph
-├── checkpoints/                  # Trained models & curated embeddings (<25 MB each)
-│   ├── ur_protonet_best.pt       # Production UR-ProtoNet weights (20.5 MB)
-│   ├── memory_bank.pt            # 9,353 curated NIH anatomical embeddings (19.1 MB)
-│   └── pretrained_encoder.pt     # Stage I supervised NIH pretrained encoder (18.9 MB)
-├── results/                      # Precomputed predictions, calibration & metrics
-│   ├── cxr_val_predictions.csv   # CXR validation sample predictions
-│   ├── chexpert_study_predictions.csv # Stanford CheXpert study-level predictions
-│   ├── phase7_summary.csv        # Comparative baseline evaluation metrics
-│   ├── phase7_stat_tests.csv     # Paired t-test statistics and Cohen's d
-│   └── phase8_ablation.csv       # Component ablation benchmark values
-├── config.py                     # Centralized hyperparameters & runtime settings
-├── data.py                       # Zero-leakage patient-level splits & episode generator
-├── evaluate.py                   # In-domain & external domain shift evaluation
-├── infer.py                      # Single-image inference & clinical triage CLI
-├── model.py                      # Core neural modules: Encoder, MemoryBank, FusionGate, EDL
-├── run_ablations.py              # Component ablations & K-shot sensitivity sweeps
-├── run_baselines.py              # 4 comparative baseline algorithms & t-tests
-├── setup.py                      # Standard Python packaging configuration
-├── train_meta.py                 # Stage III: Episodic meta-training with evidential loss
-├── train_pretrain.py             # Stage I: Supervised pretraining on NIH ChestX-ray14
-├── triage_analysis.py            # Selective prediction & risk-coverage sweeps
-├── visualize_xai.py              # Grad-CAM, Grad-CAM++, and manifold visualizers
-├── requirements.txt              # Production dependency specifications
-├── LICENSE                       # MIT Open Source License
-└── README.md                     # Documentation & experimental benchmarks
-```
-
----
-
-## 👥 Authors & Correspondence
-
-* **Abdullah Rubab** — Department of Computer Science and Engineering, Daffodil International University (`rubab2305101813@diu.edu.bd`)
-* **Md Faysal Ahmed** — Department of Computer Science and Engineering, Daffodil International University
-* **Dr. Md. Ali Hossain** (**Corresponding Author**) — Associate Professor, Department of Computer Science and Engineering & Director, NanoBio Technology Center, Daffodil International University (`ali.cse@diu.edu.bd`)
-* **Ohidujjaman** — Department of Computer Science and Engineering, United International University (`ohidujjaman@cse.uiu.ac.bd`)
-
-> **Correspondence**: Direct all research, collaboration, and clinical inquiries to **Dr. Md. Ali Hossain** ([ali.cse@diu.edu.bd](mailto:ali.cse@diu.edu.bd)).
-
----
-
-## 📄 License
-
-This repository is licensed under the [MIT License](LICENSE).
-
+MIT, see `LICENSE`.

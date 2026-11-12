@@ -36,3 +36,6 @@ model_weights_only.pt
 # Output and evaluation results
 results/
 *.csv
+
+# summary tables of the paper are tracked
+!paper_results/*.csv
